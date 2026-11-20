@@ -1128,257 +1128,278 @@ async def ws_endpoint(ws: WebSocket):
 PAGE = r"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark light">
-<script>/* 테마: 저장된 선택 > 운영체제 설정 (깜빡임 방지로 먼저 적용) */
+<meta name="color-scheme" content="light dark">
+<script>/* 테마: 저장된 선택 > 운영체제 설정 (깜빡임 방지로 먼저 적용). 기본은 주간(라이트) */
 (function(){var t;try{t=localStorage.getItem('evscada.theme')}catch(e){}
- if(t!=='light'&&t!=='dark') t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+ if(t!=='light'&&t!=='dark') t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
  document.documentElement.dataset.theme=t})();</script>
 <title>EV-S2 SCADA</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
 <style>
+/* =====================================================================
+   디자인 원칙 (ISA-101 고성능 HMI)
+   - 바탕은 전기 분전반 도장색(RAL 7035 계열)의 무채색. 정상 상태는 색을 쓰지 않음
+   - 색은 의미가 있을 때만: 운행/점등 = 신호 청색, 주의 = 황토, 경보 = 적색
+   - 단 하나의 강조: 승강기 홀 층 표시기(오렌지 LED) + 승강로
+   - 고정폭 서체는 PLC 주소/시각에만
+   ===================================================================== */
 :root{
- --bg:#0b0c0f;--s1:#121317;--s2:#17191e;--s3:#1e2026;
- --line:#24262d;--line2:#30333b;
- --tx:#f4f5f7;--tx2:#b4b8c2;--mut:#7a7f8c;--dim:#4a4e58;
- --ac:#4f8cff;--ac2:#7aa8ff;--acbg:rgba(79,140,255,.12);--acln:rgba(79,140,255,.38);
- --ok:#2ecc8f;--okbg:rgba(46,204,143,.12);
- --warn:#f5a524;--warnbg:rgba(245,165,36,.12);
- --err:#f04d5d;--errbg:rgba(240,77,93,.12);
- --hdr:rgba(11,12,15,.86);--hover:rgba(255,255,255,.02);--shadow:rgba(0,0,0,.6);
- --alarmtx:#ffb3ba;--warntx:#ffd28a;--dangertx:#ff8a95;--acdark:#3f7cf0;
- --optx:#b79cff;--opbg:rgba(183,156,255,.12);--commtx:#5fd0e4;--commbg:rgba(95,208,228,.12);
- --carbg:#e8eaef;--carln:#c9cdd6;
- --fh:76px;--r:14px;color-scheme:dark;
- --sans:"Pretendard Variable",Pretendard,Inter,"Segoe UI","Malgun Gothic",system-ui,sans-serif;
- --mono:"JetBrains Mono","Cascadia Mono",Consolas,"Malgun Gothic",monospace;
-}
-:root[data-theme="light"]{
- --bg:#f3f4f6;--s1:#ffffff;--s2:#f3f4f7;--s3:#e5e7eb;
- --line:#e4e6eb;--line2:#d2d5dc;
- --tx:#111318;--tx2:#4b5260;--mut:#6b7280;--dim:#a2a8b4;
- --ac:#2f6fed;--ac2:#2560d6;--acbg:rgba(47,111,237,.10);--acln:rgba(47,111,237,.38);
- --ok:#0f9f68;--okbg:rgba(15,159,104,.10);
- --warn:#c47705;--warnbg:rgba(214,132,8,.11);
- --err:#d92d3f;--errbg:rgba(217,45,63,.08);
- --hdr:rgba(255,255,255,.86);--hover:rgba(17,19,24,.025);--shadow:rgba(16,24,40,.16);
- --alarmtx:#b4232f;--warntx:#8f5600;--dangertx:#d92d3f;--acdark:#2360d8;
- --optx:#7445d8;--opbg:rgba(116,69,216,.10);--commtx:#0b7f94;--commbg:rgba(11,127,148,.10);
- --carbg:#ffffff;--carln:#b6bcc7;
+ --bg:#c9cec9;        /* RAL 7035 분전반 */
+ --panel:#dde1dd;     /* 패널 면 */
+ --raise:#e9ece9;     /* 버튼/입력 */
+ --inset:#b9bfba;     /* 움푹한 영역 (승강로) */
+ --line:#a7aea8;--line2:#8f9690;
+ --ink:#1b201d;--ink2:#46504a;--mut:#626b65;--dim:#8d958f;
+ --act:#1d5f93;--actbg:rgba(29,95,147,.12);--actln:rgba(29,95,147,.45);
+ --warn:#9a6a00;--warnbg:rgba(201,138,0,.16);
+ --alarm:#c0151c;--alarmbg:rgba(192,21,28,.10);
+ --led:#ff9a1f;--ledoff:#3a2d1b;--lantern:#141715;
+ --steel1:#d3d7d6;--steel2:#b9bebd;
+ --shadow:rgba(20,28,24,.22);
+ --fh:76px;--head:30px;   /* 승강로 최상층 위 오버헤드 (카 표시 라벨 공간) */
+ --sans:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
+ --mono:"IBM Plex Mono",Consolas,"Malgun Gothic",monospace;
  color-scheme:light;
+}
+:root[data-theme="dark"]{   /* 야간 제어실: 검정이 아닌 어두운 회색 */
+ --bg:#262b29;--panel:#303633;--raise:#3a413d;--inset:#1f2321;
+ --line:#47504b;--line2:#5c6660;
+ --ink:#e3e7e4;--ink2:#b3bbb6;--mut:#8f9893;--dim:#66706a;
+ --act:#6aa6d8;--actbg:rgba(106,166,216,.14);--actln:rgba(106,166,216,.5);
+ --warn:#e0ad3a;--warnbg:rgba(224,173,58,.14);
+ --alarm:#f0545a;--alarmbg:rgba(240,84,90,.14);
+ --lantern:#0e100f;
+ --steel1:#9aa1a0;--steel2:#7e8584;
+ --shadow:rgba(0,0,0,.5);
+ color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
-body{transition:background-color .2s,color .2s}
-body{min-height:100vh;background:var(--bg);color:var(--tx);font:14px/1.5 var(--sans);letter-spacing:-.005em;-webkit-font-smoothing:antialiased}
-button{font-family:inherit}
+body{min-height:100vh;background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select{font-family:inherit}
 .num{font-variant-numeric:tabular-nums}
-::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--s3);border-radius:10px;border:2px solid var(--bg)}::-webkit-scrollbar-track{background:transparent}
+:focus-visible{outline:2px solid var(--act);outline-offset:2px}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px;border:2px solid var(--panel)}::-webkit-scrollbar-track{background:transparent}
 
 /* ---------- 상단 ---------- */
-header{position:sticky;top:0;z-index:20;background:var(--hdr);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-.hbar{max-width:1560px;margin:0 auto;padding:0 28px;height:64px;display:flex;align-items:center;gap:24px}
-.brand{display:flex;align-items:center;gap:12px;min-width:0}
-.mark{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:none;background:var(--ac)}
-.mark svg{width:18px;height:18px}
-.brand b{display:block;font-size:15px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
-.brand small{display:block;font-size:11.5px;color:var(--mut);white-space:nowrap;margin-top:-1px}
-.tabs{display:flex;gap:2px;height:100%}
-.tabs button{position:relative;border:0;background:none;color:var(--mut);font-size:13.5px;font-weight:600;padding:0 14px;cursor:pointer;transition:color .15s}
-.tabs button:hover{color:var(--tx)}
-.tabs button.on{color:var(--tx)}
-.tabs button.on::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;border-radius:2px;background:var(--ac)}
+header{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line)}
+.hbar{max-width:1600px;margin:0 auto;padding:0 24px;height:56px;display:flex;align-items:center;gap:28px}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.mark{width:30px;height:30px;border-radius:4px;display:grid;place-items:center;flex:none;background:var(--lantern)}
+.mark svg{width:16px;height:16px}
+.brand b{display:block;font-size:15px;font-weight:700;white-space:nowrap}
+.brand small{display:block;font-size:12px;color:var(--mut);white-space:nowrap;margin-top:-2px}
+.tabs{display:flex;height:100%}
+.tabs button{position:relative;border:0;background:none;color:var(--mut);font-size:14px;font-weight:600;padding:0 16px;cursor:pointer}
+.tabs button:hover{color:var(--ink)}
+.tabs button.on{color:var(--ink)}
+.tabs button.on::after{content:"";position:absolute;left:16px;right:16px;bottom:-1px;height:3px;background:var(--ink)}
 .sp{flex:1}
-.pills{display:flex;gap:8px;align-items:center}
-.pill{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:600;color:var(--tx2);background:var(--s2);border:1px solid var(--line);white-space:nowrap}
-.pill i{width:6px;height:6px;border-radius:50%;background:var(--mut)}
-.pill.ok i{background:var(--ok)}.pill.err{color:var(--err)}.pill.err i{background:var(--err)}
-.pill.warn i{background:var(--warn)}.pill.ac i{background:var(--ac)}
-.seg-ctl{display:flex;padding:2px;border-radius:8px;background:var(--s2);border:1px solid var(--line)}
-.seg-ctl button{border:0;background:none;color:var(--mut);font-size:11.5px;font-weight:700;letter-spacing:.04em;padding:4px 9px;border-radius:6px;cursor:pointer}
-.seg-ctl button.on{background:var(--s1);color:var(--tx);box-shadow:0 1px 2px var(--shadow)}
-.icon-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--s2);color:var(--tx2);cursor:pointer;display:grid;place-items:center;padding:0;transition:.15s}
-.icon-btn:hover{color:var(--tx);border-color:var(--line2)}
+.pills{display:flex;gap:14px;align-items:center}
+.pill{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:var(--ink2);white-space:nowrap}
+.pill i{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--mut);flex:none}
+.pill.ok i{background:var(--ink2);border-color:var(--ink2)}
+.pill.ac i{background:var(--act);border-color:var(--act)}
+.pill.warn{color:var(--warn)}.pill.warn i{background:var(--warn);border-color:var(--warn)}
+.pill.err{color:var(--alarm);font-weight:700}.pill.err i{background:var(--alarm);border-color:var(--alarm)}
+.seg-ctl{display:flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg-ctl button{border:0;background:var(--raise);color:var(--mut);font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer}
+.seg-ctl button+button{border-left:1px solid var(--line)}
+.seg-ctl button.on{background:var(--ink);color:var(--panel)}
+.icon-btn{width:30px;height:30px;border-radius:4px;border:1px solid var(--line);background:var(--raise);color:var(--ink2);cursor:pointer;display:grid;place-items:center;padding:0}
+.icon-btn:hover{color:var(--ink);border-color:var(--line2)}
 .icon-btn svg{width:16px;height:16px}
-:root[data-theme="light"] .i-sun,:root:not([data-theme="light"]) .i-moon{display:none}
-.clock{text-align:right;line-height:1.2;min-width:96px}
-.clock b{display:block;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
-.clock span{font-size:11px;color:var(--mut)}
-@media(max-width:1100px){.hbar{height:auto;flex-wrap:wrap;padding:12px 20px;gap:12px}.tabs{order:9;width:100%;height:40px}.clock{display:none}}
+:root[data-theme="dark"] .i-moon,:root:not([data-theme="dark"]) .i-sun{display:none}
+.clock{text-align:right;line-height:1.25;min-width:100px}
+.clock b{display:block;font:500 15px var(--mono)}
+.clock span{font-size:12px;color:var(--mut)}
+@media(max-width:1100px){.hbar{height:auto;flex-wrap:wrap;padding:10px 16px;gap:10px 16px}.tabs{order:9;width:100%;height:40px;border-top:1px solid var(--line)}.clock{display:none}}
+
+/* ---------- 경보 배너: 이상일 때만 강하게 ---------- */
+.banner{display:none;align-items:center;gap:14px;padding:12px 24px;background:var(--alarm);color:#fff}
+.banner.show{display:flex}
+.banner .ico{flex:none;display:grid;place-items:center}
+.banner b{font-size:15px;font-weight:700;margin-right:12px}.banner span{font-size:13.5px;opacity:.92}
+.banner .live{margin-left:auto;width:10px;height:10px;border-radius:50%;background:#fff;animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.2}}
+
+/* ---------- 상태 띠 (KPI) ---------- */
+.wrap{max-width:1600px;margin:0 auto;padding:20px 24px 36px}
+@media(max-width:640px){.wrap{padding:12px}}
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));background:var(--panel);border:1px solid var(--line);border-radius:4px;margin-bottom:16px}
+.kpi{padding:12px 18px 13px;min-width:0;border-left:1px solid var(--line)}
+.kpi:first-child{border-left:0}
+@media(max-width:1250px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.kpi:nth-child(4){border-left:0}.kpi:nth-child(n+4){border-top:1px solid var(--line)}}
+@media(max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi{border-left:0!important;border-top:1px solid var(--line)}.kpi:nth-child(-n+2){border-top:0}.kpi:nth-child(even){border-left:1px solid var(--line)!important}}
+.kpi label{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--mut)}
+.kpi label i{width:7px;height:7px;border-radius:50%;background:transparent;border:1.5px solid var(--dim);flex:none}
+.kpi .v{display:block;font-size:20px;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .s{display:block;font-size:12.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-ok{color:var(--ink)!important}.t-warn{color:var(--warn)!important}.t-err{color:var(--alarm)!important}.t-ac{color:var(--act)!important}.t-mut{color:var(--mut)!important}
+.d-ok{background:var(--ink2)!important;border-color:var(--ink2)!important}.d-warn{background:var(--warn)!important;border-color:var(--warn)!important}
+.d-err{background:var(--alarm)!important;border-color:var(--alarm)!important}.d-ac{background:var(--act)!important;border-color:var(--act)!important}
 
 /* ---------- 레이아웃 ---------- */
-.wrap{max-width:1560px;margin:0 auto;padding:24px 28px 40px}
-@media(max-width:640px){.wrap{padding:16px}}
 .view{display:none}.view.on{display:block}
-.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;margin-bottom:20px;border-radius:var(--r);overflow:hidden;background:var(--line);border:1px solid var(--line)}
-@media(max-width:1250px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.kpi{padding:16px 18px;background:var(--s1);min-width:0}
-.kpi label{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--mut);font-weight:500}
-.kpi label i{width:6px;height:6px;border-radius:50%;background:var(--dim)}
-.kpi .v{display:block;font-size:22px;font-weight:700;letter-spacing:-.02em;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.kpi .s{display:block;font-size:12px;color:var(--tx2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.t-ok{color:var(--ok)!important}.t-warn{color:var(--warn)!important}.t-err{color:var(--err)!important}.t-ac{color:var(--ac2)!important}.t-mut{color:var(--mut)!important}
-.d-ok{background:var(--ok)!important}.d-warn{background:var(--warn)!important}.d-err{background:var(--err)!important}.d-ac{background:var(--ac)!important}
-.grid{display:grid;grid-template-columns:minmax(350px,420px) minmax(0,1fr);gap:20px;align-items:start}
-@media(max-width:1050px){.grid{grid-template-columns:1fr}}
-.col{display:flex;flex-direction:column;gap:20px;min-width:0}
-.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
-@media(max-width:760px){.g2{grid-template-columns:1fr}}
-.card{border-radius:var(--r);border:1px solid var(--line);background:var(--s1);padding:20px;min-width:0}
-.ch{display:flex;align-items:center;gap:12px;margin-bottom:16px;min-height:24px}
-.ch h3{margin:0;font-size:14px;font-weight:700}
-.ch .aside{margin-left:auto;font-size:12px;color:var(--mut)}
-.note{font-size:12px;color:var(--mut);margin-top:14px;line-height:1.6}
-.divider{height:1px;background:var(--line);margin:16px 0}
+.ops{display:grid;grid-template-columns:360px minmax(0,1fr);gap:16px;align-items:start}
+@media(max-width:1050px){.ops{grid-template-columns:1fr}}
+.main{display:grid;gap:16px;min-width:0}
+.r3{display:grid;grid-template-columns:minmax(0,1.1fr) auto minmax(0,1fr);gap:16px;align-items:stretch}
+.r2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch}
+@media(max-width:1350px){.r3{grid-template-columns:minmax(0,1fr) auto}.r3>.card:last-child{grid-column:1/-1}}
+@media(max-width:760px){.r3,.r2{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:4px;min-width:0;display:flex;flex-direction:column}
+.ch{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);min-height:42px}
+.ch h3{margin:0;font-size:14px;font-weight:600}
+.ch .aside{margin-left:auto;font-size:12.5px;color:var(--mut)}
+.cb-body{padding:16px;flex:1}
+.note{font-size:12.5px;color:var(--mut);margin-top:12px;line-height:1.6}
+.divider{height:1px;background:var(--line);margin:14px 0}
 
-/* ---------- 알람 배너 ---------- */
-.banner{display:none;align-items:center;gap:14px;padding:12px 16px;border-radius:12px;margin-bottom:20px;background:var(--errbg);border:1px solid rgba(240,77,93,.35)}
-.banner.show{display:flex}
-.banner .ico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--err);color:#fff;flex:none}
-.banner b{display:block;font-size:13.5px}.banner span{font-size:12.5px;color:var(--tx2)}
-.banner .live{margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--err);animation:blink 1.2s infinite}
-@keyframes blink{50%{opacity:.25}}
+/* ---------- 홀 층 표시기 (이 화면의 단 하나의 강조) ---------- */
+.hoist .cb-body{padding:14px}
+.indicator{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;padding:14px 18px;margin-bottom:14px;border-radius:3px;background:var(--lantern);box-shadow:inset 0 2px 6px rgba(0,0,0,.6);color:#9aa39d}
+.arrows{display:flex;flex-direction:column;gap:6px}
+.arrow{width:26px;height:26px;color:var(--ledoff);transition:color .2s}
+.arrow.on{color:var(--led);filter:drop-shadow(0 0 6px rgba(255,154,31,.55))}
+.arrow.blink{animation:blink 1s infinite}
+.seg{font:600 64px/1 var(--mono);color:var(--led);text-shadow:0 0 14px rgba(255,154,31,.45);text-align:center;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.indicator .lbl{font-size:12px;text-align:right;color:#7f8882}
+.indicator .lbl b{display:block;font-size:14px;font-weight:600;color:#dfe3e0;margin-top:2px}
+.indicator .lbl b.t-err{color:#ff6b6f!important}.indicator .lbl b.t-warn{color:#f0c050!important}
+.indicator .lbl b.t-ac,.indicator .lbl b.t-ok{color:#dfe3e0!important}
 
 /* ---------- 승강로 ---------- */
-.indicator{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;margin-bottom:16px;border-radius:12px;background:var(--bg);border:1px solid var(--line)}
-.indicator .lbl{font-size:11.5px;color:var(--mut);font-weight:500}
-.indicator .lbl b{display:block;font-size:13px;color:var(--tx);font-weight:600;margin-top:2px}
-.seg{font:600 48px/1 var(--sans);letter-spacing:-.03em;font-variant-numeric:tabular-nums;min-width:56px;text-align:center}
-.arrows{display:flex;flex-direction:column;gap:4px}
-.arrow{width:22px;height:22px;color:var(--s3);transition:color .2s}
-.arrow.on{color:var(--ac)}
-.arrow.blink{animation:blink 1s infinite}
-.shaft-wrap{display:flex;gap:12px}
-.labels{position:relative;width:92px;height:calc(var(--fh)*6);flex:none}
-.floor-row{position:absolute;left:0;right:0;height:var(--fh);display:flex;align-items:center;gap:10px}
-.fl{font:600 16px/1 var(--sans);width:30px;color:var(--mut);font-variant-numeric:tabular-nums;transition:color .2s}
-.fl.cur{color:var(--tx)}
+.shaft-wrap{display:flex;gap:10px}
+.labels{position:relative;width:84px;height:calc(var(--fh)*6 + var(--head));flex:none}
+.floor-row{position:absolute;left:0;right:0;height:var(--fh);display:flex;align-items:center;gap:8px}
+.fl{font:600 17px/1 var(--sans);width:30px;color:var(--dim);font-variant-numeric:tabular-nums;transition:color .2s}
+.fl.cur{color:var(--ink)}
 .hall{display:flex;flex-direction:column;gap:5px}
-.hb{width:28px;height:24px;border-radius:7px;border:1px solid var(--line2);background:var(--s2);color:var(--mut);font-size:9px;cursor:pointer;padding:0;display:grid;place-items:center;transition:.15s}
-.hb:not(:disabled):hover{border-color:var(--acln);color:var(--tx)}
-.hb.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.hb{width:30px;height:26px;border-radius:13px;border:1px solid var(--line2);background:linear-gradient(var(--steel1),var(--steel2));color:#4a524d;font-size:9px;cursor:pointer;padding:0;display:grid;place-items:center}
+.hb:not(:disabled):hover{border-color:var(--act)}
+.hb.on{color:#fff;background:var(--act);border-color:var(--act);box-shadow:0 0 0 3px var(--actbg)}
 .hb:disabled{cursor:default}.hb.ghost{visibility:hidden}
-.shaft{position:relative;flex:1;height:calc(var(--fh)*6);border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--bg)}
-.lvl{position:absolute;left:0;right:0;height:var(--fh);border-bottom:1px solid var(--line)}
+.shaft{position:relative;flex:1;height:calc(var(--fh)*6 + var(--head));border-radius:3px;overflow:hidden;background:var(--inset);box-shadow:inset 0 2px 8px var(--shadow)}
+.lvl{position:absolute;left:0;right:0;height:var(--fh);border-bottom:1px dashed var(--line2)}
+.overhead{position:absolute;left:0;right:0;top:0;height:var(--head);border-bottom:1px solid var(--line2);background:repeating-linear-gradient(135deg,transparent 0 6px,rgba(0,0,0,.05) 6px 8px)}
 .lvl:last-child{border-bottom:0}
-.lvl span{position:absolute;left:10px;top:6px;font:500 10px var(--mono);color:var(--dim)}
-.sens{position:absolute;right:10px;width:6px;height:6px;border-radius:50%;background:var(--s3);transition:.2s}
-.sens.on{background:var(--ok);box-shadow:0 0 0 3px var(--okbg)}
-.rail{position:absolute;top:0;bottom:0;width:2px;background:var(--s3)}
-.cable{position:absolute;left:50%;top:0;width:1px;background:var(--line2)}
-.car{position:absolute;left:24%;right:24%;height:calc(var(--fh) - 12px);bottom:6px}
-.car-box{position:absolute;inset:0;border-radius:6px;overflow:hidden;background:var(--carbg);border:2px solid var(--carln)}
-.person{position:absolute;bottom:3px;left:50%;margin-left:-8px;width:16px;height:30px;opacity:.18}
-.door{position:absolute;top:0;bottom:0;width:50%;background:linear-gradient(90deg,#9aa0ab,#c3c8d1 50%,#a9aeb8)}
-.door.l{left:0;box-shadow:inset -1px 0 0 #7d838e}.door.r{right:0;box-shadow:inset 1px 0 0 #7d838e}
-.car-led{position:absolute;top:-22px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10.5px;font-weight:600;color:var(--tx2);background:var(--s3);border:1px solid var(--line2);padding:1px 8px;border-radius:6px}
-.car.run .car-box{border-color:var(--ac)}
-.car.run .car-led{color:#fff;background:var(--ac);border-color:var(--ac)}
-.car.err .car-box{border-color:var(--err)}
-.car.err .car-led{color:#fff;background:var(--err);border-color:var(--err)}
-.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:11.5px;color:var(--mut)}
+.lvl span{position:absolute;left:8px;top:5px;font:500 10.5px var(--mono);color:var(--mut)}
+.sens{position:absolute;right:8px;width:8px;height:8px;border-radius:1px;border:1.5px solid var(--dim);transition:.15s}
+.sens.on{background:var(--act);border-color:var(--act)}
+.rail{position:absolute;top:0;bottom:0;width:3px;background:var(--line2)}
+.cable{position:absolute;left:50%;top:0;width:2px;margin-left:-1px;background:repeating-linear-gradient(var(--dim) 0 3px,transparent 3px 5px)}
+.car{position:absolute;left:22%;right:22%;height:calc(var(--fh) - 12px);bottom:6px}
+.car-box{position:absolute;inset:0;border-radius:2px;overflow:hidden;background:#f3f4f2;border:2px solid #6f7772}
+.person{position:absolute;bottom:3px;left:50%;margin-left:-8px;width:16px;height:30px;opacity:.15}
+.door{position:absolute;top:0;bottom:0;width:50%;background:repeating-linear-gradient(90deg,#aab0af 0 2px,#bcc2c1 2px 5px)}
+.door.l{left:0;box-shadow:inset -1px 0 0 #6f7772}.door.r{right:0;box-shadow:inset 1px 0 0 #6f7772}
+.car-led{position:absolute;top:-21px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:600;color:var(--ink2);background:var(--panel);border:1px solid var(--line2);padding:0 7px;border-radius:2px}
+.car.run .car-box{border-color:var(--act)}
+.car.run .car-led{color:#fff;background:var(--act);border-color:var(--act)}
+.car.err .car-box{border-color:var(--alarm)}
+.car.err .car-led{color:#fff;background:var(--alarm);border-color:var(--alarm)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--mut)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
-.legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.legend i{width:9px;height:9px;display:inline-block}
 
-/* ---------- 데이터 ---------- */
-.kv{display:grid;grid-template-columns:auto 1fr;gap:11px 16px;align-items:baseline;margin:0}
-.kv dt{font-size:13px;color:var(--tx2)}
-.kv dt code{font:500 10.5px var(--mono);color:var(--dim);margin-left:6px}
+/* ---------- 값 / 램프 ---------- */
+.kv{display:grid;grid-template-columns:auto 1fr;gap:9px 14px;align-items:baseline;margin:0}
+.kv dt{font-size:13px;color:var(--ink2)}
+.kv dt code{font:500 11px var(--mono);color:var(--mut);margin-left:6px}
 .kv dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
-.kv dd.big{font-size:18px;font-weight:700}
-.lamps{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px}
-.lp{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--tx2);padding:8px 10px;border-radius:9px;background:var(--s2);border:1px solid transparent;transition:.15s}
-.lp i{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:none;transition:.15s}
-.lp.on{color:var(--tx);background:var(--okbg);border-color:rgba(46,204,143,.25)}.lp.on i{background:var(--ok)}
-.lp.on.y{background:var(--acbg);border-color:var(--acln)}.lp.on.y i{background:var(--ac)}
-.lp.on.r{background:var(--errbg);border-color:rgba(240,77,93,.35)}.lp.on.r i{background:var(--err)}
-.lp.na{opacity:.35}
-.lp small{margin-left:auto;font:500 10px var(--mono);color:var(--dim)}
-.sub{font-size:12px;color:var(--mut);font-weight:600;margin:18px 0 8px}
-.meter{height:6px;border-radius:99px;background:var(--s3);overflow:hidden}
-.meter>div{height:100%;width:0;border-radius:99px;background:var(--ac);transition:width .4s}
-.hz{display:flex;align-items:baseline;gap:6px;margin:0 0 12px}
-.hz b{font-size:32px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.kv dd.big{font-size:18px}
+.lamps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px}
+.lp{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--mut);padding:6px 9px;border-radius:2px;background:transparent;border:1px solid transparent}
+.lp i{width:9px;height:9px;border-radius:1px;border:1.5px solid var(--dim);flex:none}
+.lp.on{color:var(--ink);font-weight:600}.lp.on i{background:var(--ink2);border-color:var(--ink2)}
+.lp.on.y i{background:var(--act);border-color:var(--act)}
+.lp.on.r{background:var(--alarmbg);border-color:var(--alarm);color:var(--alarm)}.lp.on.r i{background:var(--alarm);border-color:var(--alarm)}
+.lp.na{opacity:.4}
+.lp small{margin-left:auto;font:500 10.5px var(--mono);color:var(--dim);font-weight:500}
+.sub{font-size:12.5px;color:var(--ink2);font-weight:600;margin:16px 0 8px}
+.meter{height:8px;border-radius:1px;background:var(--inset);overflow:hidden;position:relative}
+.meter>div{height:100%;width:0;background:var(--act);transition:width .4s}
+.hz{display:flex;align-items:baseline;gap:6px;margin:0 0 10px}
+.hz b{font:600 30px var(--sans);font-variant-numeric:tabular-nums}
 .hz span{color:var(--mut);font-size:13px}
-.err-text{color:var(--err);font-size:12px;margin-top:10px}
+.err-text{color:var(--alarm);font-size:12.5px;margin-top:10px}
+.err-text:empty,.note:empty{display:none}
 
-/* ---------- 카 조작반 ---------- */
-.copwrap{display:flex;justify-content:center}
-.cop{padding:18px 22px;border-radius:16px;background:var(--bg);border:1px solid var(--line)}
-.cop-grid,.cop-door{display:grid;grid-template-columns:repeat(2,54px);gap:12px}
-.cop-door{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
-.cb{width:54px;height:54px;border-radius:50%;cursor:pointer;color:var(--tx2);font:600 19px var(--sans);transition:.15s;border:1px solid var(--line2);background:var(--s2);display:grid;place-items:center}
-.cb:hover{border-color:var(--acln);color:var(--tx)}
-.cb:active{transform:scale(.96)}
-.cb.on{background:var(--ac);border-color:var(--ac);color:#fff;box-shadow:0 0 0 4px var(--acbg)}
-.cb svg{width:22px;height:22px}
+/* ---------- 카 조작반: 스테인리스 패널 ---------- */
+.cop-card .cb-body{display:flex;justify-content:center;align-items:center;padding:18px 22px}
+.cop{padding:20px 24px;border-radius:3px;background:repeating-linear-gradient(90deg,#c9cecd 0 1px,#d6dad9 1px 3px,#cdd2d1 3px 4px);border:1px solid #9aa1a0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 1px 2px var(--shadow)}
+.cop-grid,.cop-door{display:grid;grid-template-columns:repeat(2,52px);gap:14px}
+.cop-door{margin-top:16px;padding-top:16px;border-top:1px solid #a3aaa9}
+.cb{width:52px;height:52px;border-radius:50%;cursor:pointer;color:#3b423e;font:600 18px var(--sans);border:1px solid #8b9291;background:radial-gradient(circle at 50% 40%,#eef0ef,#c3c8c7);box-shadow:inset 0 0 0 4px #d7dbda,0 1px 2px rgba(0,0,0,.25);display:grid;place-items:center;transition:box-shadow .15s,color .15s}
+.cb:hover{color:#111}
+.cb:active{transform:translateY(1px)}
+.cb.on{color:var(--act);box-shadow:inset 0 0 0 3px #1d5f93,0 0 0 3px rgba(29,95,147,.28),0 0 10px rgba(29,95,147,.35)}
+.cb svg{width:20px;height:20px}
+.cop-card .note{margin:0 16px 16px}
 
 /* ---------- 버튼 ---------- */
 .btns{display:flex;flex-wrap:wrap;gap:8px}
-.btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:9px;cursor:pointer;user-select:none;touch-action:none;border:1px solid var(--line2);background:var(--s2);color:var(--tx);font-size:13px;font-weight:600;transition:.15s;white-space:nowrap}
-.btn:hover:not(:disabled){background:var(--s3)}
-.btn.on{background:var(--acbg);border-color:var(--acln);color:var(--ac2)}
-.btn.danger{color:var(--dangertx)}
-.btn.danger.on,.btn.danger:active:not(:disabled){background:var(--err);border-color:var(--err);color:#fff}
-.btn.primary{background:var(--ac);border-color:var(--ac);color:#fff}
-.btn.primary:hover:not(:disabled){background:var(--acdark)}
-.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:3px;cursor:pointer;user-select:none;touch-action:none;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font-size:13.5px;font-weight:600;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--ink2)}
+.btn.on{background:var(--act);border-color:var(--act);color:#fff}
+.btn.danger{color:var(--alarm)}
+.btn.danger.on,.btn.danger:active:not(:disabled){background:var(--alarm);border-color:var(--alarm);color:#fff}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
 .btn svg{width:15px;height:15px;flex:none}
-.btn.sm{height:30px;padding:0 11px;font-size:12px}
+.btn.sm{height:30px;padding:0 11px;font-size:12.5px}
 .mbtns{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .mbtns .btn{justify-content:center}
-.simbox{margin-top:16px;padding:14px;border-radius:10px;background:var(--warnbg);border:1px solid rgba(245,165,36,.25);display:none}
+.simbox{margin-top:16px;padding:12px 14px;border-radius:3px;border:1px dashed var(--warn);display:none}
 .simbox .sub{margin-top:0;color:var(--warn)}
 
-/* ---------- 로그 ---------- */
-.feed{max-height:330px;overflow:auto;margin:0 -6px;padding:0 6px}
-.ev{display:grid;grid-template-columns:60px 64px 1fr;gap:10px;align-items:start;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+/* ---------- 이벤트 ---------- */
+.feed{max-height:340px;overflow:auto}
+.ev{display:grid;grid-template-columns:64px 58px 1fr;gap:10px;align-items:start;padding:7px 16px;border-bottom:1px solid var(--line);font-size:13px}
 .ev:last-child{border-bottom:0}
 .ev time{font:500 11.5px var(--mono);color:var(--mut);padding-top:2px}
-.ev p{margin:0;color:var(--tx2);word-break:keep-all}
-.ev.alarm p{color:var(--alarmtx)}.ev.warn p{color:var(--warntx)}
+.ev p{margin:0;color:var(--ink2);word-break:keep-all}
+.ev.alarm{background:var(--alarmbg)}.ev.alarm p{color:var(--alarm);font-weight:600}.ev.warn p{color:var(--warn)}
 .ev em{font-style:normal;color:var(--mut);font-size:11px;margin-left:6px;font-family:var(--mono)}
-.tag{display:inline-flex;align-items:center;justify-content:center;height:20px;padding:0 7px;border-radius:5px;font-size:11px;font-weight:600;white-space:nowrap;background:var(--s3);color:var(--tx2)}
-.tag.info{color:var(--ac2);background:var(--acbg)}
-.tag.warn{color:var(--warn);background:var(--warnbg)}
-.tag.alarm,.tag.c-alarm{color:var(--err);background:var(--errbg)}
-.tag.c-arrive{color:var(--ok);background:var(--okbg)}
-.tag.c-call{color:var(--ac2);background:var(--acbg)}
-.tag.c-op{color:var(--optx);background:var(--opbg)}
-.tag.c-comm{color:var(--commtx);background:var(--commbg)}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:2px;font-size:11.5px;font-weight:600;white-space:nowrap;color:var(--ink2);border:1px solid var(--line)}
+.tag.warn{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+.tag.alarm,.tag.c-alarm{color:#fff;background:var(--alarm);border-color:var(--alarm)}
 .empty{padding:28px 0;text-align:center;color:var(--mut);font-size:13px}
 
-/* ---------- 표/필터 ---------- */
-.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
-.field{display:flex;flex-direction:column;gap:6px}
-.field label{font-size:12px;color:var(--mut);font-weight:500}
-.inp{height:36px;padding:0 11px;border-radius:9px;border:1px solid var(--line2);background:var(--bg);color:var(--tx);font:13px var(--sans);outline:none;transition:.15s}
-.inp:focus{border-color:var(--ac);box-shadow:0 0 0 3px var(--acbg)}
+/* ---------- 표 / 필터 ---------- */
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:12.5px;color:var(--ink2)}
+.inp{height:36px;padding:0 10px;border-radius:3px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font-size:13.5px;outline:none}
+.inp:focus{border-color:var(--act);box-shadow:0 0 0 2px var(--actbg)}
 .inp.q{width:240px}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
-.chip{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 11px;border-radius:8px;background:var(--s2);font-size:12px;color:var(--tx2)}
-.chip b{color:var(--tx);font-variant-numeric:tabular-nums}
-.tblw{overflow:auto;border-radius:12px;border:1px solid var(--line);max-height:620px}
-table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
-th,td{padding:10px 14px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
-th{position:sticky;top:0;z-index:1;background:var(--s2);color:var(--mut);font-size:12px;font-weight:600}
-tbody tr:hover td{background:var(--hover)}
+.chips{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:12px;font-size:13px;color:var(--ink2)}
+.chip{display:inline-flex;align-items:center;gap:7px}
+.chip b{color:var(--ink);font-variant-numeric:tabular-nums}
+.tblw{overflow:auto;border:1px solid var(--line);border-radius:3px;max-height:620px;background:var(--raise)}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+th,td{padding:9px 14px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;z-index:1;background:var(--panel);color:var(--ink2);font-size:12.5px;font-weight:600}
+tbody tr:hover td{background:var(--actbg)}
 tbody tr:last-child td{border-bottom:0}
-td.msg{white-space:normal;min-width:280px;color:var(--tx)}
-td.m{font:500 12px var(--mono);color:var(--tx2)}
+td.msg{white-space:normal;min-width:280px;color:var(--ink)}
+td.m{font:500 12px var(--mono);color:var(--ink2)}
 td.v{font:600 13px var(--mono)}
-.v1{color:var(--ok)}.vna{color:var(--dim)}
-.pager{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:14px;font-size:12.5px;color:var(--tx2)}
-.wtag{font-size:11px;font-weight:600;color:var(--ac2);padding:2px 7px;border-radius:5px;background:var(--acbg)}
+.v1{color:var(--act)}.vna{color:var(--dim)}
+.pager{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:12px;font-size:13px;color:var(--ink2)}
+.wtag{font-size:11.5px;font-weight:600;color:var(--act);padding:1px 6px;border-radius:2px;border:1px solid var(--actln)}
 
-footer{max-width:1560px;margin:0 auto;padding:0 28px 28px;display:flex;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--mut)}
-footer b{color:var(--tx2);font-weight:500}
-#toast{position:fixed;right:24px;bottom:24px;z-index:50;max-width:440px;padding:12px 16px;border-radius:10px;font-size:13px;background:var(--s3);border:1px solid var(--line2);border-left:3px solid var(--err);color:var(--tx);box-shadow:0 16px 40px -8px var(--shadow);transform:translateY(16px);opacity:0;pointer-events:none;transition:.2s}
+footer{max-width:1600px;margin:0 auto;padding:0 24px 24px;display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
+footer b{color:var(--ink2);font-weight:500}
+#toast{position:fixed;right:24px;bottom:24px;z-index:50;max-width:440px;padding:12px 16px;border-radius:3px;font-size:13.5px;background:var(--ink);color:var(--panel);border-left:4px solid var(--alarm);box-shadow:0 12px 30px -8px var(--shadow);transform:translateY(16px);opacity:0;pointer-events:none;transition:.2s}
 #toast.show{transform:none;opacity:1}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body>
 <header><div class="hbar">
  <div class="brand">
-  <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 3v18"/><path d="M8.5 9l-1.5 2h3zM15.5 15l1.5-2h-3z" fill="#fff" stroke-width="1"/></svg></div>
+  <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="#ff9a1f"><path d="M12 3l6 8H6zM12 21l-6-8h12z"/></svg></div>
   <div><b>EV-S2 SCADA</b><small data-i18n="subtitle"></small></div>
  </div>
  <nav class="tabs" id="tabs">
@@ -1391,7 +1412,7 @@ footer b{color:var(--tx2);font-weight:500}
   <span class="pill" id="pMode"><i></i><span>-</span></span>
   <span class="pill" id="pConn"><i></i><span>-</span></span>
   <span class="pill" id="pRtt" style="display:none"><i></i><span>-</span></span>
-  <div class="seg-ctl" id="langSw"><button data-l="ko">KO</button><button data-l="en">EN</button></div>
+  <div class="seg-ctl" id="langSw" role="group" aria-label="Language"><button data-l="ko">KO</button><button data-l="en">EN</button></div>
   <button class="icon-btn" id="themeBtn">
    <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
    <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
@@ -1400,11 +1421,11 @@ footer b{color:var(--tx2);font-weight:500}
  <div class="clock"><b id="clkT">--:--:--</b><span id="clkD">-</span></div>
 </div></header>
 
-<div class="wrap">
- <div class="banner" id="banner"><div class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></svg></div>
-  <div><b id="bnT">-</b><span id="bnS"></span></div><span class="live"></span></div>
+<div class="banner" id="banner" role="alert"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></svg></div>
+ <div><b id="bnT">-</b><span id="bnS"></span></div><span class="live"></span></div>
 
- <section class="kpis">
+<div class="wrap">
+ <section class="kpis" aria-live="polite">
   <div class="kpi"><label><i id="kRunD"></i><span data-i18n="k_run"></span></label><span class="v" id="kRun">-</span><span class="s" id="kRunS">-</span></div>
   <div class="kpi"><label><i></i><span data-i18n="k_pos"></span></label><span class="v num" id="kPos">-</span><span class="s" id="kPosS">-</span></div>
   <div class="kpi"><label><i id="kDirD"></i><span data-i18n="k_dir"></span></label><span class="v" id="kDir">-</span><span class="s" id="kDirS">-</span></div>
@@ -1415,23 +1436,23 @@ footer b{color:var(--tx2);font-weight:500}
 
  <!-- ================= 운전 현황 ================= -->
  <section class="view on" id="v-ops">
-  <div class="grid">
-   <div class="col">
-    <div class="card">
-     <div class="ch"><h3 data-i18n="c_shaft"></h3><span class="aside" id="shaftAside"></span></div>
+  <div class="ops">
+   <div class="card hoist">
+    <div class="ch"><h3 data-i18n="c_shaft"></h3><span class="aside" id="shaftAside"></span></div>
+    <div class="cb-body">
      <div class="indicator">
-      <div class="lbl"><span data-i18n="ind_floor"></span><b id="indSt">-</b></div>
-      <span id="seg" class="seg">-</span>
       <div class="arrows">
-       <svg class="arrow" id="aUp" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5l8 11H4z"/></svg>
-       <svg class="arrow" id="aDn" viewBox="0 0 24 24" fill="currentColor"><path d="M12 19L4 8h16z"/></svg>
+       <svg class="arrow" id="aUp" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l9 12H3z"/></svg>
+       <svg class="arrow" id="aDn" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20L3 8h18z"/></svg>
       </div>
+      <span id="seg" class="seg">-</span>
+      <div class="lbl"><span data-i18n="ind_floor"></span><b id="indSt">-</b></div>
      </div>
      <div class="shaft-wrap">
       <div class="labels" id="labels"></div>
       <div class="shaft" id="shaft">
        <div id="lvls"></div>
-       <div class="rail" style="left:16%"></div><div class="rail" style="right:16%"></div>
+       <div class="rail" style="left:14%"></div><div class="rail" style="right:14%"></div>
        <div class="cable" id="cable"></div>
        <div class="car" id="car"><div class="car-led" id="carLed">-</div>
         <div class="car-box">
@@ -1441,18 +1462,17 @@ footer b{color:var(--tx2);font-weight:500}
       </div>
      </div>
      <div class="legend">
-      <span><i style="background:var(--ac)"></i><span data-i18n="lg_call"></span></span>
-      <span><i style="background:var(--ok);border-radius:50%"></i><span data-i18n="lg_sens"></span></span>
+      <span><i style="background:var(--act);border-radius:50%"></i><span data-i18n="lg_call"></span></span>
+      <span><i style="background:var(--act);border-radius:1px"></i><span data-i18n="lg_sens"></span></span>
      </div>
-     <div class="note" id="shaftNote"></div>
     </div>
    </div>
 
-   <div class="col">
-    <div class="g2">
+   <div class="main">
+    <div class="r3">
      <div class="card">
       <div class="ch"><h3 data-i18n="c_op"></h3></div>
-      <dl class="kv">
+      <div class="cb-body"><dl class="kv">
        <dt><span data-i18n="r_run"></span><code>D10</code></dt><dd class="big" id="vRun">-</dd>
        <dt><span data-i18n="r_dir"></span><code>D4</code></dt><dd id="vDir">-</dd>
        <dt><span data-i18n="r_cur"></span><code>D0</code></dt><dd id="vCur">-</dd>
@@ -1460,66 +1480,69 @@ footer b{color:var(--tx2);font-weight:500}
        <dt><span data-i18n="r_door"></span><code>D9</code></dt><dd id="vDoor">-</dd>
        <dt><span data-i18n="r_err"></span><code>D12</code></dt><dd id="vErr">-</dd>
        <dt><span data-i18n="r_dpos"></span></dt><dd id="vDoorPos">-</dd>
-      </dl>
+      </dl></div>
      </div>
-     <div class="card">
+     <div class="card cop-card">
       <div class="ch"><h3 data-i18n="c_cop"></h3></div>
-      <div class="copwrap"><div class="cop">
+      <div class="cb-body"><div class="cop">
        <div class="cop-grid" id="cop"></div>
        <div class="cop-door">
         <button class="cb" id="bOpen" data-tag="화면_열림" data-i18n-title="t_open"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 12l6-5v10zM20 12l-6-5v10z"/></svg></button>
         <button class="cb" id="bClose" data-tag="화면_닫힘" data-i18n-title="t_close"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 12L4 7v10zM14 12l6-5v10z"/></svg></button>
        </div>
       </div></div>
-      <div class="note" data-i18n="n_cop"></div>
      </div>
      <div class="card">
       <div class="ch"><h3 data-i18n="c_vfd"></h3><span class="aside" id="vfdAside"></span></div>
-      <div class="hz"><b id="vHz">-</b><span>Hz</span><span id="vHzS" style="margin-left:auto"></span></div>
-      <div class="meter"><div id="hzBar"></div></div>
-      <div class="lamps" id="vfdLamps" style="margin-top:14px;grid-template-columns:repeat(2,minmax(0,1fr))"></div>
-      <div class="divider"></div>
-      <dl class="kv">
-       <dt><span data-i18n="p_hi"></span><code>D1000</code></dt><dd id="pHi">-</dd>
-       <dt><span data-i18n="p_lo"></span><code>D1001</code></dt><dd id="pLo">-</dd>
-       <dt><span data-i18n="p_in"></span><code>D1006</code></dt><dd id="pIn">-</dd>
-      </dl>
-      <div class="err-text" id="vfdErr"></div>
+      <div class="cb-body">
+       <div class="hz"><b id="vHz">-</b><span>Hz</span><span id="vHzS" style="margin-left:auto"></span></div>
+       <div class="meter"><div id="hzBar"></div></div>
+       <div class="lamps" id="vfdLamps" style="margin-top:12px;grid-template-columns:repeat(2,minmax(0,1fr))"></div>
+       <div class="divider"></div>
+       <dl class="kv">
+        <dt><span data-i18n="p_hi"></span><code>D1000</code></dt><dd id="pHi">-</dd>
+        <dt><span data-i18n="p_lo"></span><code>D1001</code></dt><dd id="pLo">-</dd>
+        <dt><span data-i18n="p_in"></span><code>D1006</code></dt><dd id="pIn">-</dd>
+       </dl>
+       <div class="err-text" id="vfdErr"></div>
+      </div>
      </div>
+    </div>
+
+    <div class="r2">
      <div class="card">
       <div class="ch"><h3 data-i18n="c_maint"></h3></div>
-      <div class="btns">
-       <button class="btn" id="bInsp" data-tag="화면_점검"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span data-i18n="b_insp"></span></button>
-       <button class="btn danger" id="bReset" data-tag="화면_에러리셋"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span data-i18n="b_reset"></span></button>
-      </div>
-      <div class="sub" data-i18n="s_manual"></div>
-      <div class="mbtns">
-       <button class="btn hold" data-tag="화면_수동상승">▲ <span data-i18n="b_up"></span></button>
-       <button class="btn hold" data-tag="화면_수동하강">▼ <span data-i18n="b_dn"></span></button>
-       <button class="btn hold" data-tag="화면_수동열림">◀▶ <span data-i18n="b_open"></span></button>
-       <button class="btn hold" data-tag="화면_수동닫힘">▶◀ <span data-i18n="b_close"></span></button>
-      </div>
-      <div class="note" data-i18n="n_manual"></div>
-      <div class="simbox" id="simBox">
-       <div class="sub" data-i18n="s_sim"></div>
+      <div class="cb-body">
        <div class="btns">
-        <button class="btn danger sm" data-tag="스위치_비상정지" data-toggle data-i18n="b_estop"></button>
-        <button class="btn sm" data-tag="센서_문" data-toggle data-i18n="b_obst"></button>
+        <button class="btn" id="bInsp" data-tag="화면_점검"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg><span data-i18n="b_insp"></span></button>
+        <button class="btn danger" id="bReset" data-tag="화면_에러리셋"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span data-i18n="b_reset"></span></button>
+       </div>
+       <div class="sub" data-i18n="s_manual"></div>
+       <div class="mbtns">
+        <button class="btn hold" data-tag="화면_수동상승">▲ <span data-i18n="b_up"></span></button>
+        <button class="btn hold" data-tag="화면_수동하강">▼ <span data-i18n="b_dn"></span></button>
+        <button class="btn hold" data-tag="화면_수동열림">◀▶ <span data-i18n="b_open"></span></button>
+        <button class="btn hold" data-tag="화면_수동닫힘">▶◀ <span data-i18n="b_close"></span></button>
+       </div>
+       <div class="simbox" id="simBox">
+        <div class="sub" data-i18n="s_sim"></div>
+        <div class="btns">
+         <button class="btn danger sm" data-tag="스위치_비상정지" data-toggle data-i18n="b_estop"></button>
+         <button class="btn sm" data-tag="센서_문" data-toggle data-i18n="b_obst"></button>
+        </div>
        </div>
       </div>
      </div>
+     <div class="card">
+      <div class="ch"><h3 data-i18n="c_logic"></h3><span class="aside" data-i18n="a_logic"></span></div>
+      <div class="cb-body"><div class="lamps" id="flagLamps"></div></div>
+     </div>
     </div>
 
-    <div class="card">
-     <div class="ch"><h3 data-i18n="c_logic"></h3><span class="aside" data-i18n="a_logic"></span></div>
-     <div class="lamps" id="flagLamps"></div>
-    </div>
-
-    <div class="g2">
+    <div class="r2">
      <div class="card">
       <div class="ch"><h3 data-i18n="c_io"></h3></div>
-      <div class="lamps" id="ioLamps"></div>
-      <div class="note" id="ioNote"></div>
+      <div class="cb-body"><div class="lamps" id="ioLamps"></div><div class="note t-err" id="ioNote"></div></div>
      </div>
      <div class="card">
       <div class="ch"><h3 data-i18n="c_live"></h3><button class="btn sm" style="margin-left:auto" onclick="go('hist')" data-i18n="b_all"></button></div>
@@ -1534,12 +1557,13 @@ footer b{color:var(--tx2);font-weight:500}
  <section class="view" id="v-hist">
   <div class="card">
    <div class="ch"><h3 data-i18n="c_hist"></h3><span class="aside" id="dbInfo"></span></div>
+   <div class="cb-body">
    <form class="filters" id="hForm" onsubmit="event.preventDefault();H.page=0;loadHist()">
-    <div class="field"><label data-i18n="f_start"></label><input class="inp" type="date" id="hS"></div>
-    <div class="field"><label data-i18n="f_end"></label><input class="inp" type="date" id="hE"></div>
-    <div class="field"><label data-i18n="f_lv"></label><select class="inp" id="hLv"></select></div>
-    <div class="field"><label data-i18n="f_cat"></label><select class="inp" id="hCat"></select></div>
-    <div class="field"><label data-i18n="f_q"></label><input class="inp q" type="search" id="hQ" data-i18n-ph="ph_q"></div>
+    <div class="field"><label for="hS" data-i18n="f_start"></label><input class="inp" type="date" id="hS"></div>
+    <div class="field"><label for="hE" data-i18n="f_end"></label><input class="inp" type="date" id="hE"></div>
+    <div class="field"><label for="hLv" data-i18n="f_lv"></label><select class="inp" id="hLv"></select></div>
+    <div class="field"><label for="hCat" data-i18n="f_cat"></label><select class="inp" id="hCat"></select></div>
+    <div class="field"><label for="hQ" data-i18n="f_q"></label><input class="inp q" type="search" id="hQ" data-i18n-ph="ph_q"></div>
     <div class="field"><label>&nbsp;</label><div class="btns">
      <button class="btn primary" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span data-i18n="b_search"></span></button>
      <button class="btn" type="button" onclick="quick(0)" data-i18n="b_today"></button>
@@ -1553,8 +1577,9 @@ footer b{color:var(--tx2);font-weight:500}
     <thead><tr><th data-i18n="h_no"></th><th data-i18n="h_time"></th><th data-i18n="h_lv"></th><th data-i18n="h_cat"></th><th data-i18n="h_msg"></th><th data-i18n="h_run"></th><th data-i18n="h_pos"></th><th data-i18n="h_src"></th></tr></thead>
     <tbody id="hBody"></tbody></table></div>
    <div class="pager"><span id="hInfo">-</span>
-    <select class="inp" id="hSize" style="height:30px"><option>50</option><option selected>100</option><option>200</option><option>500</option></select>
+    <select class="inp" id="hSize" style="height:30px" aria-label="Page size"><option>50</option><option selected>100</option><option>200</option><option>500</option></select>
     <button class="btn sm" id="hPrev" data-i18n="b_prev"></button><button class="btn sm" id="hNext" data-i18n="b_next"></button></div>
+   </div>
   </div>
  </section>
 
@@ -1562,25 +1587,26 @@ footer b{color:var(--tx2);font-weight:500}
  <section class="view" id="v-vars">
   <div class="card">
    <div class="ch"><h3 data-i18n="c_vars"></h3><span class="aside" id="varCount"></span></div>
+   <div class="cb-body">
    <div class="filters">
-    <div class="field"><label data-i18n="f_q"></label><input class="inp q" type="search" id="flt" data-i18n-ph="ph_var"></div>
-    <div class="field"><label data-i18n="f_dev"></label><select class="inp" id="fDev"></select></div>
-    <div class="field"><label data-i18n="f_val"></label><select class="inp" id="fVal"></select></div>
+    <div class="field"><label for="flt" data-i18n="f_q"></label><input class="inp q" type="search" id="flt" data-i18n-ph="ph_var"></div>
+    <div class="field"><label for="fDev" data-i18n="f_dev"></label><select class="inp" id="fDev"></select></div>
+    <div class="field"><label for="fVal" data-i18n="f_val"></label><select class="inp" id="fVal"></select></div>
    </div>
    <div class="tblw"><table><thead><tr><th data-i18n="v_name"></th><th data-i18n="v_addr"></th><th data-i18n="v_type"></th><th data-i18n="v_val"></th><th data-i18n="v_desc"></th><th></th></tr></thead><tbody id="vt"></tbody></table></div>
+   </div>
   </div>
  </section>
 </div>
 
 <footer>
- <span><span data-i18n="ft_comm"></span> <b id="fPlc">-</b> · Modbus TCP</span>
+ <span><span data-i18n="ft_comm"></span> <b id="fPlc">-</b> (Modbus TCP)</span>
  <span><span data-i18n="ft_upd"></span> <b id="fUpd">-</b></span>
  <span><span data-i18n="ft_db"></span> <b id="fDb">-</b></span>
  <span class="sp"></span>
- <span>LS XGB · XBL-EMTA · EV_s2</span>
+ <span>LS XGB, XBL-EMTA, EV_s2</span>
 </footer>
-<div id="toast"></div>
-
+<div id="toast" role="status"></div>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1592,38 +1618,38 @@ ko:{subtitle:'승강기 통합 감시제어',tab_ops:'운전 현황',tab_hist:'�
  k_run:'운행 상태',k_pos:'현재 위치',k_dir:'운행 방향',k_door:'도어',k_hz:'VFD 지령',k_day:'금일 운행',
  c_shaft:'승강로',ind_floor:'현재 층',lg_call:'호출 등록',lg_sens:'층 위치 센서 감지',
  c_op:'운행 상세',r_run:'운행 상태',r_dir:'운행 방향',r_cur:'현재 위치',r_jdg:'판단 기준층',r_door:'도착 단계',r_err:'에러 코드',r_dpos:'도어 개방률',
- c_cop:'카 조작반',t_open:'도어 열림 · 누르고 있는 동안 유지',t_close:'도어 닫힘 · 누르고 있는 동안 유지',
+ c_cop:'카 조작반',t_open:'도어 열림 (누르고 있는 동안)',t_close:'도어 닫힘 (누르고 있는 동안)',
  n_cop:'층 버튼을 누르면 행선 호출이 등록되고, 한 번 더 누르면 취소됩니다. 도어 버튼은 누르고 있는 동안만 동작합니다.',
  c_vfd:'VFD',p_hi:'고속 운전',p_lo:'저속 운전',p_in:'점검 운전',
- c_maint:'점검 · 복구',b_insp:'점검 모드',b_reset:'에러 리셋',s_manual:'수동 운전 (점검 모드 전용)',
+ c_maint:'점검과 복구',b_insp:'점검 모드',b_reset:'에러 리셋',s_manual:'수동 운전 (점검 모드 전용)',
  b_up:'수동 상승',b_dn:'수동 하강',b_open:'도어 열림',b_close:'도어 닫힘',
  n_manual:'수동 운전은 점검 모드에서 버튼을 누르고 있는 동안에만 동작하며, 손을 떼거나 통신이 끊기면 즉시 정지합니다.',
  s_sim:'시뮬레이션 현장 입력',b_estop:'비상정지 스위치',b_obst:'도어 물체 감지',
- c_logic:'제어 판단 · 호출 요청',a_logic:'PLC 판단 비트',c_io:'도어 · 안전 입출력',c_live:'실시간 이벤트',b_all:'전체 이력',
+ c_logic:'제어 판단과 호출 요청',a_logic:'PLC 판단 비트',c_io:'도어와 안전 입출력',c_live:'실시간 이벤트',b_all:'전체 이력',
  c_hist:'이벤트 이력',f_start:'시작일',f_end:'종료일',f_lv:'등급',f_cat:'분류',f_q:'검색',ph_q:'내용 또는 조작 IP',
  b_search:'조회',b_today:'오늘',b_7d:'7일',b_30d:'30일',b_csv:'CSV 내보내기',all:'전체',
  h_no:'번호',h_time:'일시',h_lv:'등급',h_cat:'분류',h_msg:'내용',h_run:'운행 상태',h_pos:'위치',h_src:'조작 위치',
  b_prev:'이전',b_next:'다음',pg:'전체 {t}건 중 {a}–{b}',res:'조회 결과',cnt:'{n}건',no_ev:'조건에 맞는 이벤트가 없습니다',no_live:'기록된 이벤트가 없습니다',
- db_info:'DB {mb} MB · {d}일 보관',db_off:'이력 DB 사용 안 함',
- c_vars:'PLC 변수 모니터',ph_var:'변수명 · 주소 · 설명',f_dev:'디바이스',f_val:'필터',dev_m:'M (내부 릴레이)',dev_p:'P (입출력)',dev_d:'D (데이터)',
+ db_info:'DB {mb} MB, {d}일 보관',db_off:'이력 DB 사용 안 함',
+ c_vars:'PLC 변수 모니터',ph_var:'변수명, 주소, 설명',f_dev:'디바이스',f_val:'필터',dev_m:'M (내부 릴레이)',dev_p:'P (입출력)',dev_d:'D (데이터)',
  val_on:'ON / 0 아님',val_w:'쓰기 가능',v_name:'변수명',v_addr:'주소',v_type:'타입',v_val:'현재값',v_desc:'설명',wr:'쓰기',var_cnt:'변수 {n}개',
  ft_comm:'통신',ft_upd:'최종 수신',ft_db:'이력 DB',sim_engine:'내장 시뮬레이터',unused:'사용 안 함',
  bn_off:'PLC 통신 두절',bn_off_s:'자동으로 재연결을 시도합니다',bn_fault:'이상 정지',bn_fault_s:'현장 원인을 제거한 뒤 에러 리셋을 눌러 주십시오',code:'코드 {n}',
- exact:'정위치 · 착상 완료',between:'층간 이동 중',dir_up:'▲ 상승',dir_dn:'▼ 하강',dir_none:'정지',
+ exact:'착상 완료',between:'층간 이동 중',dir_up:'▲ 상승',dir_dn:'▼ 하강',dir_none:'정지',
  cruise:'정속 주행',slowing:'감속 구간',vfd_stop:'VFD 정지',
- d_closed:'닫힘',d_open:'열림',d_moving:'동작 중',d_sub:'개방률 {p}%{e} · {s}',est:' (추정)',seq_idle:'시퀀스 대기',seq:'{x} 단계',
+ d_closed:'닫힘',d_open:'열림',d_moving:'동작 중',d_sub:'{p}% 열림{e}, {s}',est:' (추정)',seq_idle:'시퀀스 대기',seq:'{x} 단계',
  hz_hi:'고속 지령',hz_lo:'저속 지령',hz_in:'점검 지령',hz_idle:'대기 지령 {v} Hz',
- day:'{n}회',day_s:'호출 {c} · 조작 {o} · 경보 {a}',
- running:'운전 중',stopped:'정지',judge:'판단층 {n}',vfd_err:'VFD 파라미터 블록을 읽을 수 없습니다 · ',
+ day:'{n}회',day_s:'호출 {c}, 조작 {o}, 경보 {a}',
+ running:'운전 중',stopped:'정지',judge:'판단층 {n}',vfd_err:'VFD 파라미터 블록을 읽을 수 없습니다: ',
  io_sim:'시뮬레이션 모델이 계산한 현장 입출력 값입니다.',
  io_bad:'P 디바이스 미러 값이 PLC 로직과 일치하지 않아 표시를 중단했습니다. PLC 에 EV_s2(P00_P_MIRROR) 프로그램이 다운로드되었는지 확인하십시오.',
  io_ok:'P00_P_MIRROR 가 M0010~M0015 로 복사한 현장 입출력 값입니다 (검증 완료).',
  io_wait:'P00_P_MIRROR 미러 값 · 도어가 닫히면 자동으로 일치 여부를 검증합니다.',
  note_sim:'시뮬레이션 모드에서는 승강장 호출 버튼(▲▼)을 직접 누를 수 있습니다.',
  note_plc:'카 위치는 PLC 현재층 값(D0) 기준이며, 승강장 호출 버튼은 현장 입력이라 표시만 합니다.',
- hall_up:'{f}층 승강장 상행 호출',hall_dn:'{f}층 승강장 하행 호출',field_only:' · 현장 입력 (표시 전용)',cab:'{f}층 행선 버튼',
+ hall_up:'{f}층 승강장 상행 호출',hall_dn:'{f}층 승강장 하행 호출',field_only:' (현장 입력, 표시 전용)',cab:'{f}층 행선 버튼',
  sens_u:'{f}층 상부 위치 센서',sens_l:'{f}층 하부 위치 센서',
- fail:'명령 실패 · ',srv_err:'서버와 통신할 수 없습니다 · ',ws_lost:'SCADA 서버와의 연결이 끊어졌습니다',hist_err:'이력을 불러올 수 없습니다 · ',
+ fail:'명령 실패: ',srv_err:'서버와 통신할 수 없습니다: ',ws_lost:'SCADA 서버와의 연결이 끊어졌습니다',hist_err:'이력을 불러올 수 없습니다: ',
  to_light:'라이트 테마로 전환',to_dark:'다크 테마로 전환',
  wd:['일','월','화','수','목','금','토']},
 en:{subtitle:'Elevator Supervisory Control',tab_ops:'Operations',tab_hist:'Event History',tab_vars:'Tag Monitor',
@@ -1631,7 +1657,7 @@ en:{subtitle:'Elevator Supervisory Control',tab_ops:'Operations',tab_hist:'Event
  k_run:'Status',k_pos:'Position',k_dir:'Direction',k_door:'Door',k_hz:'VFD Command',k_day:'Trips Today',
  c_shaft:'Hoistway',ind_floor:'Current floor',lg_call:'Call registered',lg_sens:'Floor sensor active',
  c_op:'Operation Detail',r_run:'Status',r_dir:'Direction',r_cur:'Position',r_jdg:'Decision floor',r_door:'Arrival stage',r_err:'Error code',r_dpos:'Door opening',
- c_cop:'Car Operating Panel',t_open:'Door open · hold to keep open',t_close:'Door close · hold to close',
+ c_cop:'Car Operating Panel',t_open:'Door open (hold)',t_close:'Door close (hold)',
  n_cop:'Press a floor button to register a car call; press again to cancel. Door buttons act only while held.',
  c_vfd:'VFD',p_hi:'High speed',p_lo:'Low speed',p_in:'Inspection',
  c_maint:'Maintenance & Recovery',b_insp:'Inspection mode',b_reset:'Fault reset',s_manual:'Manual run (inspection mode only)',
@@ -1643,36 +1669,36 @@ en:{subtitle:'Elevator Supervisory Control',tab_ops:'Operations',tab_hist:'Event
  b_search:'Search',b_today:'Today',b_7d:'7 days',b_30d:'30 days',b_csv:'Export CSV',all:'All',
  h_no:'No.',h_time:'Time',h_lv:'Level',h_cat:'Category',h_msg:'Message',h_run:'Status',h_pos:'Position',h_src:'Operator',
  b_prev:'Previous',b_next:'Next',pg:'{a}–{b} of {t}',res:'Results',cnt:'{n}',no_ev:'No events match the filter',no_live:'No events recorded yet',
- db_info:'DB {mb} MB · kept {d} days',db_off:'Event DB disabled',
- c_vars:'PLC Tag Monitor',ph_var:'Name · address · description',f_dev:'Device',f_val:'Filter',dev_m:'M (internal relay)',dev_p:'P (I/O)',dev_d:'D (data)',
+ db_info:'DB {mb} MB, kept {d} days',db_off:'Event DB disabled',
+ c_vars:'PLC Tag Monitor',ph_var:'Name, address or description',f_dev:'Device',f_val:'Filter',dev_m:'M (internal relay)',dev_p:'P (I/O)',dev_d:'D (data)',
  val_on:'ON / non-zero',val_w:'Writable',v_name:'Tag',v_addr:'Address',v_type:'Type',v_val:'Value',v_desc:'Description',wr:'Write',var_cnt:'{n} tags',
  ft_comm:'Link',ft_upd:'Last update',ft_db:'Event DB',sim_engine:'Built-in simulator',unused:'disabled',
  bn_off:'PLC communication lost',bn_off_s:'Reconnecting automatically',bn_fault:'Fault stop',bn_fault_s:'Clear the cause on site, then press Fault reset',code:'code {n}',
- exact:'Level · landed',between:'Travelling between floors',dir_up:'▲ Up',dir_dn:'▼ Down',dir_none:'Stopped',
+ exact:'Landed',between:'Travelling between floors',dir_up:'▲ Up',dir_dn:'▼ Down',dir_none:'Stopped',
  cruise:'Cruising',slowing:'Decelerating',vfd_stop:'VFD stopped',
- d_closed:'Closed',d_open:'Open',d_moving:'Moving',d_sub:'{p}% open{e} · {s}',est:' (est.)',seq_idle:'Sequence idle',seq:'{x} stage',
+ d_closed:'Closed',d_open:'Open',d_moving:'Moving',d_sub:'{p}% open{e}, {s}',est:' (est.)',seq_idle:'Sequence idle',seq:'{x} stage',
  hz_hi:'High-speed command',hz_lo:'Low-speed command',hz_in:'Inspection command',hz_idle:'Standby setpoint {v} Hz',
- day:'{n}',day_s:'Calls {c} · Ops {o} · Alarms {a}',
- running:'Running',stopped:'Stopped',judge:'Decision floor {n}',vfd_err:'Cannot read VFD parameter block · ',
+ day:'{n}',day_s:'Calls {c}, ops {o}, alarms {a}',
+ running:'Running',stopped:'Stopped',judge:'Decision floor {n}',vfd_err:'Cannot read VFD parameter block: ',
  io_sim:'Field I/O values computed by the simulation model.',
  io_bad:'P-device mirror does not match PLC logic, so field I/O is hidden. Check that EV_s2 (P00_P_MIRROR) is downloaded to the PLC.',
  io_ok:'Field I/O copied to M0010–M0015 by P00_P_MIRROR (verified).',
  io_wait:'P00_P_MIRROR values · verified automatically when the door closes.',
  note_sim:'In simulation mode you can press the hall call buttons (▲▼) directly.',
  note_plc:'Car position follows the PLC floor value (D0). Hall call buttons are field inputs and are display-only.',
- hall_up:'Floor {f} hall call up',hall_dn:'Floor {f} hall call down',field_only:' · field input (display only)',cab:'Floor {f} car call',
+ hall_up:'Floor {f} hall call up',hall_dn:'Floor {f} hall call down',field_only:' (field input, display only)',cab:'Floor {f} car call',
  sens_u:'Floor {f} upper position sensor',sens_l:'Floor {f} lower position sensor',
- fail:'Command failed · ',srv_err:'Cannot reach server · ',ws_lost:'Connection to SCADA server lost',hist_err:'Cannot load history · ',
+ fail:'Command failed: ',srv_err:'Cannot reach server: ',ws_lost:'Connection to SCADA server lost',hist_err:'Cannot load history: ',
  to_light:'Switch to light theme',to_dark:'Switch to dark theme',
  wd:['Sun','Mon','Tue','Wed','Thu','Fri','Sat']}};
 const E={
  ko:{RUN:{0:'대기',1:'상승 운행',2:'하강 운행',3:'도착',8:'점검 운전',9:'이상 정지'},
-  RUN_D:{0:'호출 대기 중',1:'목적층으로 상승 중',2:'목적층으로 하강 중',3:'도착 · 도어 시퀀스',8:'유지보수 수동 운전',9:'원인 제거 후 리셋 필요'},
+  RUN_D:{0:'호출 대기 중',1:'목적층으로 상승 중',2:'목적층으로 하강 중',3:'도어 시퀀스 진행',8:'유지보수 수동 운전',9:'원인 제거 후 리셋 필요'},
   DIR:{0:'정지',1:'상승',2:'하강'},DOOR:{0:'대기',1:'열림',2:'닫힘'},ERR:{0:'정상',1:'비상정지',2:'운행 중 도어 열림'},
   LV:{info:'정보',warn:'주의',alarm:'경보'},
   CAT:{run:'운행',arrive:'도착',pos:'위치',door:'도어',call:'호출',alarm:'알람',comm:'통신',op:'조작',sys:'시스템'}},
  en:{RUN:{0:'Standby',1:'Moving up',2:'Moving down',3:'Arrived',8:'Inspection',9:'Fault stop'},
-  RUN_D:{0:'Waiting for calls',1:'Travelling up to destination',2:'Travelling down to destination',3:'At landing · door sequence',8:'Manual maintenance run',9:'Reset required after clearing cause'},
+  RUN_D:{0:'Waiting for calls',1:'Travelling up to destination',2:'Travelling down to destination',3:'Door sequence in progress',8:'Manual maintenance run',9:'Reset required after clearing cause'},
   DIR:{0:'Stopped',1:'Up',2:'Down'},DOOR:{0:'Idle',1:'Open',2:'Close'},ERR:{0:'Normal',1:'Emergency stop',2:'Door opened while running'},
   LV:{info:'Info',warn:'Warning',alarm:'Alarm'},
   CAT:{run:'Run',arrive:'Arrival',pos:'Position',door:'Door',call:'Call',alarm:'Fault',comm:'Comms',op:'Operator',sys:'System'}}};
@@ -1687,6 +1713,7 @@ const nf=n=>Number(n||0).toLocaleString(lang==='ko'?'ko-KR':'en-US');
 
 let S={tags:{},today:{}}, SYMS=[], mode='', lastPoll=0, pollDt=500, feedKey='';
 const fh=()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fh'));
+const hd=()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head'));
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 
@@ -1735,9 +1762,9 @@ setInterval(tick,1000);
 
 /* ---------- 정적 UI ---------- */
 function buildShaft(){
- const L=$('labels'), V=$('lvls'), H=fh(); L.innerHTML=''; V.innerHTML='';
+ const L=$('labels'), V=$('lvls'), H=fh(), HD=hd(); L.innerHTML=''; V.innerHTML='<div class="overhead"></div>';
  for(let f=6;f>=1;f--){
-  const top=(6-f)*H;
+  const top=(6-f)*H+HD;
   const up=f<6?`<button class="hb" id="hu${f}" data-tag="버튼_${f}층상행" title="${esc(t('hall_up',{f}))}">▲</button>`:'<button class="hb ghost" tabindex="-1"></button>';
   const dn=f>1?`<button class="hb" id="hd${f}" data-tag="버튼_${f}층하행" title="${esc(t('hall_dn',{f}))}">▼</button>`:'<button class="hb ghost" tabindex="-1"></button>';
   L.insertAdjacentHTML('beforeend',`<div class="floor-row" style="top:${top}px"><span class="fl" id="fl${f}">${f}F</span><div class="hall">${up}${dn}</div></div>`);
@@ -1814,7 +1841,7 @@ const anim={pos:1,door:0,fp:1,tp:1,fd:0,td:0,t0:0,dur:100,
   this.draw(); requestAnimationFrame(x=>this.frame(x))},
  draw(){const H=fh();
   $('car').style.transform=`translateY(${-(this.pos-1)*H}px)`;
-  $('cable').style.height=`${(6-this.pos)*H+6}px`;
+  $('cable').style.height=`${(6-this.pos)*H+hd()+6}px`;
   $('dl').style.transform=`translateX(${-this.door*96}%)`; $('dr').style.transform=`translateX(${this.door*96}%)`}};
 requestAnimationFrame(x=>anim.frame(x));
 
@@ -1835,14 +1862,14 @@ function render(){
  const moving=!!(g('인버터_상승')||g('인버터_하강')), slow=!!g('판단_저속');
  // 배너
  const bn=$('banner');
- if(!S.connected){bn.classList.add('show');$('bnT').textContent=t('bn_off');$('bnS').textContent=(S.error?S.error+' · ':'')+t('bn_off_s')}
- else if(run===9){bn.classList.add('show');$('bnT').textContent=t('bn_fault')+' · '+(e('ERR')[er]??t('code',{n:er}));$('bnS').textContent=t('bn_fault_s')}
+ if(!S.connected){bn.classList.add('show');$('bnT').textContent=t('bn_off');$('bnS').textContent=(S.error?S.error+'. ':'')+t('bn_off_s')}
+ else if(run===9){bn.classList.add('show');$('bnT').textContent=t('bn_fault')+': '+(e('ERR')[er]??t('code',{n:er}));$('bnS').textContent=t('bn_fault_s')}
  else bn.classList.remove('show');
  // KPI
  const pos=S.pos||1, d=Math.max(0,Math.min(1,S.door||0));
  kpi('kRun',e('RUN')[run]??'-',e('RUN_D')[run]??'-',TONE[run]||'');
  const exact=cur!=null&&cur%10===0, lo=Math.floor((cur||0)/10);
- kpi('kPos',cur==null?'-':(exact?flr(cur/10):`${flr(lo)} – ${flr(lo+1)}`),cur==null?'-':`${exact?t('exact'):t('between')} · D0=${cur}`);
+ kpi('kPos',cur==null?'-':(exact?flr(cur/10):`${flr(lo)} – ${flr(lo+1)}`),cur==null?'-':`${exact?t('exact'):t('between')} (D0=${cur})`);
  kpi('kDir',dir==null?'-':(dir===1?t('dir_up'):dir===2?t('dir_dn'):t('dir_none')),moving?(slow?t('slowing'):t('cruise')):t('vfd_stop'),dir?'ac':'');
  kpi('kDoor',d<=0.01?t('d_closed'):d>=0.99?t('d_open'):t('d_moving'),
   t('d_sub',{p:Math.round(d*100),e:mode==='plc'?t('est'):'',s:ds?t('seq',{x:e('DOOR')[ds]}):t('seq_idle')}),d<=0.01?'':'ac');
@@ -1857,7 +1884,7 @@ function render(){
  $('indSt').textContent=e('RUN')[run]??'-'; $('indSt').className=TONE[run]?'t-'+TONE[run]:'';
  $('aUp').classList.toggle('on',dir===1); $('aUp').classList.toggle('blink',dir===1&&moving);
  $('aDn').classList.toggle('on',dir===2); $('aDn').classList.toggle('blink',dir===2&&moving);
- $('carLed').textContent=(e('RUN')[run]??'-')+(slow&&moving?(lang==='ko'?' · 저속':' · slow'):'');
+ $('carLed').textContent=(e('RUN')[run]??'-')+(slow&&moving?(lang==='ko'?', 저속':', slow'):'');
  for(let f=1;f<=6;f++){
   on('hu'+f,g('호출_'+f+'층상행')); on('hd'+f,g('호출_'+f+'층하행')); on('cab'+f,g('호출_내부'+f+'층'));
   on('su'+f,g('센서_'+f+'층상부')); on('sl'+f,g('센서_'+f+'층하부'));
@@ -1867,7 +1894,7 @@ function render(){
  // 운행 상세
  $('vRun').textContent=run==null?'-':e('RUN')[run]??run; $('vRun').className='big'+(TONE[run]?' t-'+TONE[run]:'');
  $('vDir').textContent=dir==null?'-':`${e('DIR')[dir]??dir} (${dir})`;
- $('vCur').textContent=cur==null?'-':`${cur} · ${flr((cur/10).toFixed(1))}`;
+ $('vCur').textContent=cur==null?'-':`${flr((cur/10).toFixed(1))} (${cur})`;
  $('vJdg').textContent=g('위치_판단층')??'-';
  $('vDoor').textContent=ds==null?'-':`${e('DOOR')[ds]??ds} (${ds})`;
  $('vErr').textContent=er==null?'-':`${e('ERR')[er]??'?'} (${er})`; $('vErr').className=er?'t-err':'';
@@ -1889,8 +1916,7 @@ function render(){
  // 플래그 / IO
  F.forEach((x,i)=>on('f'+i,g(x[0]))); for(let f=1;f<=6;f++) on('rq'+f,g('요청_'+f+'층'));
  IO.forEach((x,i)=>on('io'+i,g(x[0])));
- $('ioNote').textContent=mode==='sim'?t('io_sim'):S.p_mirror===false?t('io_bad'):S.p_mirror?t('io_ok'):t('io_wait');
- $('ioNote').className='note'+(S.p_mirror===false?' t-err':'');
+ $('ioNote').textContent=mode!=='sim'&&S.p_mirror===false?t('io_bad'):'';   // 미러 불일치 경고만 표시
  // 변수표
  if($('v-vars').classList.contains('on')){
   SYMS.forEach((s,i)=>{const el=$('vv'+i); if(!el) return; const v=tg[s.name];
@@ -1908,7 +1934,6 @@ function applyMode(){
  const sim=mode==='sim';
  $('simBox').style.display=sim?'block':'none';
  document.querySelectorAll('.hb[data-tag]').forEach(b=>{b.disabled=!sim; if(!sim&&!b.title.endsWith(t('field_only'))) b.title+=t('field_only')});
- $('shaftNote').textContent=mode?(sim?t('note_sim'):t('note_plc')):'';
 }
 
 /* ---------- 이벤트 이력 ---------- */
