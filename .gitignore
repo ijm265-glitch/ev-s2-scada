@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# 이벤트 이력 DB (실행 시 자동 생성)
+*.db
+*.db-wal
+*.db-shm
+
+# CSV 내보내기 파일
+EV-S2_event_log_*.csv
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
